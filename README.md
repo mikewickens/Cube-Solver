@@ -2,6 +2,23 @@
 
 A local browser-based Rubik's Cube playground built with TypeScript, React, Three.js, Vite, and `cubejs`. Supports the **2×2**, **3×3**, and **4×4** cubes with manual play, shuffle, and an automatic solver (2×2 and 3×3).
 
+## Screenshots
+
+**3×3 solved — starting state**
+![3x3 solved](docs/screenshots/01-3x3-solved.png)
+
+**3×3 scrambled (15 random moves)**
+![3x3 scrambled](docs/screenshots/02-3x3-scrambled.png)
+
+**3×3 after the auto-solver runs — 20-move solution from 5 attempts**
+![3x3 after solve](docs/screenshots/03-3x3-after-solve.png)
+
+**2×2 after the auto-solver runs — solved via the 3×3 lift**
+![2x2 after solve](docs/screenshots/04-2x2-after-solve.png)
+
+**4×4 scrambled — manual play only (no auto-solver yet)**
+![4x4 scrambled](docs/screenshots/05-4x4-scrambled.png)
+
 ## Workflow
 
 1. Pick a **Cube size** from the dropdown (2×2, 3×3, or 4×4).
