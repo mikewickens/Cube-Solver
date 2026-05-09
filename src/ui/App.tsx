@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { RotateCcw, Shuffle, Wand2 } from 'lucide-react';
+import { RotateCcw, Shuffle, Sparkles, Wand2 } from 'lucide-react';
 import { CubeState } from '../cube/CubeState';
 import { Move } from '../cube/moves';
 import { formatMoves, generateScramble } from '../cube/notation';
@@ -51,12 +51,12 @@ export function App() {
             setSolverReady(false);
             return;
           }
-          setStatus('Preparing solver...');
+          if (!busyRef.current) setStatus('Preparing solver...');
           await initWorkerSolver();
           setSolverReady(true);
-          setStatus('Ready');
+          if (!busyRef.current) setStatus('Ready');
         } catch (error) {
-          setStatus(error instanceof Error ? error.message : 'Solver initialization failed');
+          if (!busyRef.current) setStatus(error instanceof Error ? error.message : 'Solver initialization failed');
         }
       })();
     }, 250);
@@ -120,6 +120,34 @@ export function App() {
     setAttempts([]);
     setTotalMoves(0);
     await animateSequence(moves, `Shuffling ${moves.length} random moves`, solved, `Shuffled ${moves.length} random moves`);
+  }
+
+  async function showcase() {
+    if (!rendererRef.current || busyRef.current) return;
+    if (cubeSize !== 3) {
+      setStatus('Showcase animation is designed for the 3x3 cube');
+      return;
+    }
+    const solved = CubeState.solved(3);
+    busyRef.current = true;
+    setIsBusy(true);
+    rendererRef.current.setInteractive(false);
+    stateRef.current = solved;
+    setLastShuffle([]);
+    setSolution([]);
+    setAttempts([]);
+    setTotalMoves(0);
+    setStep({ current: 0, total: 1 });
+    setCurrentMove('Showcase');
+    setStatus('Showcase: cubies in flight');
+    await rendererRef.current.playAssemblyShowcase(solved);
+    rendererRef.current.setInteractive(true);
+    stateRef.current = solved.clone();
+    setStep({ current: 1, total: 1 });
+    setCurrentMove('Assembled');
+    setStatus('Showcase complete: solved 3x3');
+    busyRef.current = false;
+    setIsBusy(false);
   }
 
   function reset() {
@@ -259,6 +287,7 @@ export function App() {
             <button onClick={shuffle} disabled={isBusy}><Shuffle size={16} /> Shuffle</button>
             <button onClick={reset} disabled={isBusy}><RotateCcw size={16} /> Reset</button>
             <button className="primary-btn" onClick={solve} disabled={isBusy || cubeSize === 4} title={cubeSize === 4 ? 'No auto-solver for 4x4 yet' : ''}><Wand2 size={16} /> Solver</button>
+            <button className="showcase-btn" onClick={showcase} disabled={isBusy || cubeSize !== 3} title={cubeSize !== 3 ? 'Showcase is built for the 3x3 cube' : 'Explode and assemble the 3x3 cube'}><Sparkles size={16} /> Showcase</button>
           </div>
           <label className="slider">
             <span>Move speed</span>

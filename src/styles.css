@@ -241,7 +241,7 @@ textarea {
 }
 
 .simple-buttons {
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
 }
 
 .transport {
@@ -259,6 +259,11 @@ textarea {
 .primary, .primary-btn {
   background: linear-gradient(135deg, #0891b2, #0f766e);
   border-color: rgba(125, 211, 252, 0.55);
+}
+
+.showcase-btn {
+  background: linear-gradient(135deg, #7c3aed, #0891b2);
+  border-color: rgba(216, 180, 254, 0.55);
 }
 
 .slider {

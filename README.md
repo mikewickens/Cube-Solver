@@ -24,6 +24,7 @@ A local browser-based Rubik's Cube playground built with TypeScript, React, Thre
 4. Click **Solver** to solve the current cube state (2×2 and 3×3 only).
 5. Click **Reset** to return to solved.
 6. Drag any visible cube face to turn that side manually — including middle slices on the 3×3 and inner slices on the 4×4.
+7. Click **Showcase** on the 3×3 to play a cinematic explode-and-assemble animation.
 
 The solver does **not** solve by reversing the stored shuffle. The app converts the current cubie/sticker state into a facelet string, solves that state with `cubejs` in a Web Worker (off the main thread, so the UI never freezes), verifies the returned sequence against the app's own `CubeState`, then animates the verified solution.
 
@@ -55,6 +56,7 @@ npm test
 - **Shuffle**: Resets to solved, generates a random move sequence, and animates it immediately.
 - **Reset**: Resets the cube to solved.
 - **Solver**: Runs the configured number of attempts in a worker thread (each capped by a per-attempt timeout to prevent hangs), then animates the best result.
+- **Showcase**: 3×3-only animation mode. Cubies fly outward with random spin, the cube tumbles with particle/ring effects, then every piece assembles back into a solved cube.
 - **Move speed**: Controls animation speed for both shuffle and solve moves.
 - **Mouse drag on cube**: Turns the visible face you drag. Drag empty space to orbit the camera. Drag direction is camera-aware, so the rotation always matches the direction you swiped regardless of how the cube is oriented on screen.
 

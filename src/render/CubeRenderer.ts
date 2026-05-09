@@ -11,6 +11,17 @@ type CubieView = {
   group: THREE.Group;
 };
 
+type ShowcaseItem = {
+  group: THREE.Group;
+  homePosition: THREE.Vector3;
+  startPosition: THREE.Vector3;
+  lanePosition: THREE.Vector3;
+  homeRotation: THREE.Euler;
+  startRotation: THREE.Euler;
+  spin: THREE.Vector3;
+  delay: number;
+};
+
 export type LayerTurn = {
   axis: Axis;
   layer: number;
@@ -41,6 +52,14 @@ export class CubeRenderer {
   private cubieSize: number;
   private stickerSize: number;
   private active?: { turn: LayerTurn; start: number; duration: number; cubies: THREE.Group[]; complete: () => void };
+  private showcase?: {
+    start: number;
+    duration: number;
+    items: ShowcaseItem[];
+    particles: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
+    ring: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+    complete: () => void;
+  };
   private logical: CubeState;
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
@@ -108,7 +127,7 @@ export class CubeRenderer {
   }
 
   animateLayerTurn(stateBefore: CubeState, turn: LayerTurn, durationMs: number): Promise<void> {
-    if (this.active) return Promise.resolve();
+    if (this.active || this.showcase) return Promise.resolve();
     this.setState(stateBefore);
     const { axis, layer } = turn;
     const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
@@ -133,6 +152,66 @@ export class CubeRenderer {
     });
   }
 
+  playAssemblyShowcase(state = CubeState.solved(3), durationMs = 6400): Promise<void> {
+    if (this.active || this.showcase || this.n !== 3) return Promise.resolve();
+    this.setState(state);
+    this.root.rotation.set(0, 0, 0);
+
+    const orderedCubies = [...this.cubies.values()].sort((a, b) => a.id.localeCompare(b.id));
+    const items = orderedCubies.map((view, index) => {
+      const homePosition = view.group.position.clone();
+      const homeRotation = view.group.rotation.clone();
+      const direction = homePosition.lengthSq() > 0.001
+        ? homePosition.clone().normalize()
+        : new THREE.Vector3(0, 1, 0);
+      const ring = index % 9;
+      const band = Math.floor(index / 9);
+      const angle = (ring / 9) * Math.PI * 2 + band * 0.36;
+      const lanePosition = new THREE.Vector3(
+        Math.cos(angle) * (4.15 + band * 0.52),
+        (band - 1) * 1.65 + Math.sin(angle * 2) * 0.28,
+        Math.sin(angle) * (4.15 + band * 0.52)
+      );
+      const startPosition = lanePosition.clone().add(direction.multiplyScalar(1.15));
+      const startRotation = new THREE.Euler(
+        homeRotation.x + (band + 1) * Math.PI * 0.46,
+        homeRotation.y + (ring % 3 - 1) * Math.PI * 0.62,
+        homeRotation.z + (index % 2 === 0 ? 1 : -1) * Math.PI * 0.42
+      );
+      const spin = new THREE.Vector3(
+        (band - 1) * Math.PI * 0.45,
+        (ring % 3 - 1) * Math.PI * 0.35,
+        (index % 2 === 0 ? 1 : -1) * Math.PI * 0.3
+      );
+      return {
+        group: view.group,
+        homePosition,
+        startPosition,
+        lanePosition,
+        homeRotation,
+        startRotation,
+        spin,
+        delay: (ring / 9) * 0.16 + band * 0.035
+      };
+    });
+
+    const particles = this.makeShowcaseParticles();
+    const ring = this.makeShowcaseRing();
+    this.scene.add(particles);
+    this.scene.add(ring);
+
+    return new Promise((resolve) => {
+      this.showcase = {
+        start: performance.now(),
+        duration: durationMs,
+        items,
+        particles,
+        ring,
+        complete: resolve
+      };
+    });
+  }
+
   finishMove(nextState: CubeState) {
     this.active?.cubies.forEach((group) => this.root.attach(group));
     this.pivot.rotation.set(0, 0, 0);
@@ -151,6 +230,44 @@ export class CubeRenderer {
     const rim = new THREE.DirectionalLight('#38bdf8', 1.2);
     rim.position.set(-4, 2, -5);
     this.scene.add(hemi, key, rim);
+  }
+
+  private makeShowcaseParticles() {
+    const count = 180;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const radius = 1.6 + Math.random() * 4.4;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(Math.random() * 2 - 1);
+      positions[i * 3] = Math.sin(phi) * Math.cos(theta) * radius;
+      positions[i * 3 + 1] = Math.cos(phi) * radius;
+      positions[i * 3 + 2] = Math.sin(phi) * Math.sin(theta) * radius;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({
+      color: '#67e8f9',
+      size: 0.055,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    return new THREE.Points(geometry, material);
+  }
+
+  private makeShowcaseRing() {
+    const geometry = new THREE.TorusGeometry(2.45, 0.018, 8, 128);
+    const material = new THREE.MeshBasicMaterial({
+      color: '#22d3ee',
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const ring = new THREE.Mesh(geometry, material);
+    ring.rotation.x = Math.PI / 2;
+    return ring;
   }
 
   private buildCubies(state: CubeState) {
@@ -362,11 +479,109 @@ export class CubeRenderer {
       setAxisRotation(this.pivot, axis, angle * easeInOutCubic(t));
       if (t >= 1) this.active.complete();
     }
+    if (this.showcase) this.updateShowcase();
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   };
+
+  private updateShowcase() {
+    if (!this.showcase) return;
+    const elapsed = performance.now() - this.showcase.start;
+    const t = Math.min(1, elapsed / this.showcase.duration);
+    const scatterEnd = 0.28;
+    const gatherStart = 0.36;
+    const gatherLength = 0.58;
+    const tumble = Math.sin(t * Math.PI);
+    const micro = Math.sin(t * Math.PI * 4) * 0.08 * tumble;
+
+    this.root.rotation.set(
+      tumble * 0.72 + micro,
+      tumble * Math.PI * 1.22,
+      Math.sin(t * Math.PI * 1.4) * 0.42 * tumble
+    );
+
+    for (const item of this.showcase.items) {
+      if (t < scatterEnd) {
+        const explode = smootherStep(t / scatterEnd);
+        item.group.position.lerpVectors(item.homePosition, item.startPosition, explode);
+        item.group.rotation.set(
+          item.homeRotation.x + (item.startRotation.x - item.homeRotation.x) * explode,
+          item.homeRotation.y + (item.startRotation.y - item.homeRotation.y) * explode,
+          item.homeRotation.z + (item.startRotation.z - item.homeRotation.z) * explode
+        );
+        continue;
+      }
+
+      if (t < gatherStart) {
+        const orbit = (t - scatterEnd) / (gatherStart - scatterEnd);
+        item.group.position.copy(item.startPosition).lerp(item.lanePosition, smootherStep(orbit));
+        item.group.rotation.set(
+          item.startRotation.x + item.spin.x * orbit * 0.25,
+          item.startRotation.y + item.spin.y * orbit * 0.25,
+          item.startRotation.z + item.spin.z * orbit * 0.25
+        );
+        continue;
+      }
+
+      const local = clamp01((t - gatherStart - item.delay) / (gatherLength - item.delay));
+      const settle = smootherStep(local);
+      const arc = Math.sin(local * Math.PI) * 0.28;
+      const laneDrift = new THREE.Vector3(
+        Math.sin((item.delay + t) * Math.PI * 2) * 0.08,
+        arc,
+        Math.cos((item.delay + t) * Math.PI * 2) * 0.08
+      ).multiplyScalar(1 - settle);
+      item.group.position.lerpVectors(item.lanePosition, item.homePosition, settle).add(laneDrift);
+      item.group.rotation.set(
+        item.startRotation.x * (1 - settle) + item.homeRotation.x * settle + item.spin.x * (1 - local) * 0.18,
+        item.startRotation.y * (1 - settle) + item.homeRotation.y * settle + item.spin.y * (1 - local) * 0.18,
+        item.startRotation.z * (1 - settle) + item.homeRotation.z * settle + item.spin.z * (1 - local) * 0.18
+      );
+    }
+
+    const particleOpacity = t < 0.16 ? smootherStep(t / 0.16) : t > 0.82 ? smootherStep((1 - t) / 0.18) : 0.58;
+    this.showcase.particles.material.opacity = Math.max(0, Math.min(0.72, particleOpacity));
+    this.showcase.particles.rotation.y += 0.0045;
+    this.showcase.particles.rotation.x += 0.0015;
+
+    const pulse = Math.sin(t * Math.PI);
+    this.showcase.ring.material.opacity = pulse * 0.34;
+    this.showcase.ring.scale.setScalar(0.86 + pulse * 1.05);
+    this.showcase.ring.rotation.z += 0.008;
+
+    if (t >= 1) {
+      const { particles, ring, complete } = this.showcase;
+      this.showcase = undefined;
+      for (const item of this.cubies.values()) {
+        item.group.rotation.set(0, 0, 0);
+      }
+      this.scene.remove(particles);
+      this.scene.remove(ring);
+      particles.geometry.dispose();
+      particles.material.dispose();
+      ring.geometry.dispose();
+      ring.material.dispose();
+      this.root.rotation.set(0, 0, 0);
+      this.setState(this.logical);
+      complete();
+    }
+  }
 }
 
 function quarterTurnsForMove(move: Move) {
   return rotationForMove(move).angle / (Math.PI / 2);
+}
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function easeOutQuart(t: number) {
+  const x = clamp01(t);
+  return 1 - Math.pow(1 - x, 4);
+}
+
+function smootherStep(t: number) {
+  const x = clamp01(t);
+  return x * x * x * (x * (x * 6 - 15) + 10);
 }
